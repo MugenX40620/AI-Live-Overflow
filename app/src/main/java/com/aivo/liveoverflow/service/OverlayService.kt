@@ -20,101 +20,112 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        try {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // 创建一个自定义的 View 来绘制桌宠
-        overlayView = object : View(this) {
-            override fun onDraw(canvas: Canvas) {
-                super.onDraw(canvas)
+            overlayView = object : View(this) {
+                override fun onDraw(canvas: Canvas) {
+                    super.onDraw(canvas)
+                    try {
+                        // 画粉色圆球
+                        val bodyPaint = Paint().apply {
+                            color = Color.parseColor("#FF6B9D")
+                            isAntiAlias = true
+                            style = Paint.Style.FILL
+                        }
+                        // 防止宽高为0
+                        val cx = (width / 2f).coerceAtLeast(40f)
+                        val cy = (height / 2f).coerceAtLeast(40f)
+                        canvas.drawCircle(cx, cy, 40f, bodyPaint)
 
-                // 1. 画粉色圆球身体
-                val bodyPaint = Paint().apply {
-                    color = Color.parseColor("#FF6B9D") // 樱花粉
-                    isAntiAlias = true
-                    style = Paint.Style.FILL
-                }
-                // 圆心在视图中心，半径40dp
-                canvas.drawCircle(width / 2f, height / 2f, 40f, bodyPaint)
+                        // 画白色眼睛
+                        val eyePaint = Paint().apply {
+                            color = Color.WHITE
+                            isAntiAlias = true
+                            style = Paint.Style.FILL
+                        }
+                        canvas.drawCircle(cx - 15f, cy - 10f, 8f, eyePaint)
+                        canvas.drawCircle(cx + 15f, cy - 10f, 8f, eyePaint)
 
-                // 2. 画白色大眼睛
-                val eyePaint = Paint().apply {
-                    color = Color.WHITE
-                    isAntiAlias = true
-                    style = Paint.Style.FILL
+                        // 画黑色瞳孔
+                        val pupilPaint = Paint().apply {
+                            color = Color.BLACK
+                            isAntiAlias = true
+                            style = Paint.Style.FILL
+                        }
+                        canvas.drawCircle(cx - 15f, cy - 10f, 4f, pupilPaint)
+                        canvas.drawCircle(cx + 15f, cy - 10f, 4f, pupilPaint)
+                        
+                        // 画高光
+                        val highlightPaint = Paint().apply {
+                            color = Color.WHITE
+                            isAntiAlias = true
+                            style = Paint.Style.FILL
+                        }
+                        canvas.drawCircle(cx - 17f, cy - 12f, 2f, highlightPaint)
+                        canvas.drawCircle(cx + 13f, cy - 12f, 2f, highlightPaint)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
-                // 左眼
-                canvas.drawCircle(width / 2f - 15f, height / 2f - 10f, 8f, eyePaint)
-                // 右眼
-                canvas.drawCircle(width / 2f + 15f, height / 2f - 10f, 8f, eyePaint)
-
-                // 3. 画黑色瞳孔（稍微偏一点，显得灵动）
-                val pupilPaint = Paint().apply {
-                    color = Color.BLACK
-                    isAntiAlias = true
-                    style = Paint.Style.FILL
-                }
-                // 左眼瞳孔
-                canvas.drawCircle(width / 2f - 15f, height / 2f - 10f, 4f, pupilPaint)
-                // 右眼瞳孔
-                canvas.drawCircle(width / 2f + 15f, height / 2f - 10f, 4f, pupilPaint)
-                
-                // 4. 画高光（让眼睛更有神）
-                val highlightPaint = Paint().apply {
-                    color = Color.WHITE
-                    isAntiAlias = true
-                    style = Paint.Style.FILL
-                }
-                canvas.drawCircle(width / 2f - 17f, height / 2f - 12f, 2f, highlightPaint)
-                canvas.drawCircle(width / 2f + 13f, height / 2f - 12f, 2f, highlightPaint)
             }
-        }
 
-        // 设置触摸拖动逻辑
-        overlayView.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    isDragging = true
-                    touchX = event.x
-                    touchY = event.y
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (isDragging) {
-                        val params = overlayView.layoutParams as WindowManager.LayoutParams
-                        params.x += (event.rawX - touchX).toInt()
-                        params.y += (event.rawY - touchY).toInt()
-                        windowManager.updateViewLayout(overlayView, params)
+            overlayView.setOnTouchListener { v, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        isDragging = true
                         touchX = event.x
                         touchY = event.y
                     }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (isDragging) {
+                            try {
+                                val params = overlayView.layoutParams as WindowManager.LayoutParams
+                                params.x += (event.rawX - touchX).toInt()
+                                params.y += (event.rawY - touchY).toInt()
+                                windowManager.updateViewLayout(overlayView, params)
+                                touchX = event.x
+                                touchY = event.y
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        isDragging = false
+                    }
                 }
-                MotionEvent.ACTION_UP -> {
-                    isDragging = false
-                }
+                true
             }
-            true // 消费事件
-        }
 
-        // 配置悬浮窗参数
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            android.graphics.PixelFormat.TRANSLUCENT
-        )
-        params.gravity = android.view.Gravity.START or android.view.Gravity.TOP
-        params.x = 100 // 初始位置 X
-        params.y = 100 // 初始位置 Y
-        
-        windowManager.addView(overlayView, params)
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                android.graphics.PixelFormat.TRANSLUCENT
+            )
+            params.gravity = android.view.Gravity.START or android.view.Gravity.TOP
+            params.x = 100
+            params.y = 100
+            
+            windowManager.addView(overlayView, params)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            stopSelf()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::overlayView.isInitialized) {
-            windowManager.removeView(overlayView)
+        try {
+            if (::overlayView.isInitialized) {
+                windowManager.removeView(overlayView)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }
