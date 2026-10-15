@@ -18,15 +18,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Build Android project
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11'
+
+      - name: Build APK
         run: |
-          chmod +x gradlew 2>/dev/null || true
-          if [ -x ./gradlew ]; then
-            ./gradlew assembleDebug
-          else
-            echo "gradlew not found, using system gradle"
-            gradle assembleDebug
-          fi
+          chmod +x gradlew || true
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
