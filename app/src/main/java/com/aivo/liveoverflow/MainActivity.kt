@@ -1,50 +1,45 @@
 package com.aivo.liveoverflow
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.result.contract.ActivityResultContracts
+import android.provider.Settings
 import androidx.appcompat.app.AppCompatActivity
 import com.aivo.liveoverflow.service.OverlayService
 
 class MainActivity : AppCompatActivity() {
 
-    private val overlayPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        startOverlayService()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        if (!checkOverlayPermission()) {
-            requestOverlayPermission()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            // 没授权悬浮窗 → 跳系统设置页
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
         } else {
             startOverlayService()
         }
     }
 
-    private fun checkOverlayPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            android.provider.Settings.canDrawOverlays(this)
-        } else true
-    }
-
-    private fun requestOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-            overlayPermissionLauncher.launch(intent)
+    override fun onResume() {
+        super.onResume()
+        // 从设置页授权返回后，若已授权则启动桌宠
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+            startOverlayService()
         }
     }
 
     private fun startOverlayService() {
-        val serviceIntent = Intent(this, OverlayService::class.java)
+        val intent = Intent(this, OverlayService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
+            startForegroundService(intent)
         } else {
-            startService(serviceIntent)
+            startService(intent)
         }
         finish()
     }
