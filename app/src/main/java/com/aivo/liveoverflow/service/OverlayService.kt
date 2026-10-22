@@ -7,58 +7,99 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
+import org.json.JSONObject
+import java.util.Calendar
 
 /**
- * 悬浮窗桌宠服务。
- * 用透明 WebView 加载本地 assets/pet.html 渲染桌宠，
- * 前台服务保活 + 常驻通知，支持拖拽 / 点击 / 双击 / 长按。
+ * 悬浮窗桌宠服务（v2）。
+ *
+ * 职责：
+ * - 透明 WebView 渲染 assets/pet.html
+ * - 状态机：清醒 / 睡觉 / 吃饭 / 饿了（饥饿度随真实时间增长，重启不丢）
+ * - 设置同步：MainActivity 改 SharedPreferences，这里监听并即时推送
+ * - JS 桥：拖拽、动态调整窗口大小、喂食、开设置
  */
 class OverlayService : Service() {
-
-    private var windowManager: WindowManager? = null
-    private var overlayView: WebView? = null
-    private var params: WindowManager.LayoutParams? = null
 
     companion object {
         private const val CHANNEL_ID = "pet_overlay_channel"
         private const val NOTIFICATION_ID = 1001
-        private const val PET_SIZE_DP = 160
-        private const val PET_HEIGHT_DP = 205
+        private const val PREFS = "pet_prefs"
+
+        private const val TICK_MS = 15000L
+        private const val EAT_MS = 7000L
+
+        // 每涨 1 点饥饿需要的分钟数（慢/正常/快）
+        private val MIN_PER_POINT = intArrayOf(14, 9, 5)
     }
+
+    private var wm: WindowManager? = null
+    private var web: WebView? = null
+    private var params: WindowManager.LayoutParams? = null
+
+    private lateinit var prefs: SharedPreferences
+    private val handler = Handler(Looper.getMainLooper())
+    private var tick: Runnable? = null
+
+    private var eatingUntil = 0L
+    private var lastNotifText = ""
+
+    // ==== 生命周期 ====
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        prefs = getSharedPreferences(PREFS, Context.MODE_MULTI_PROCESS)
         createNotificationChannel()
-        // 关键：startForegroundService 后必须立刻 startForeground，否则会崩
-        startForeground(NOTIFICATION_ID, buildNotification("我在这里。"))
+        startForeground(NOTIFICATION_ID, buildNotification(notifText()))
         setupOverlay()
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
+        startTick()
     }
 
-    private fun setupOverlay() {
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        pushState()
+        return START_STICKY
+    }
 
+    override fun onDestroy() {
+        tick?.let { handler.removeCallbacks(it) }
+        prefs.unregisterOnSharedPreferenceChangeListener(prefListener)
+        web?.let {
+            wm?.removeView(it)
+            it.destroy()
+        }
+        web = null
+        super.onDestroy()
+    }
+
+    // ==== 悬浮窗 ====
+
+    private fun setupOverlay() {
+        wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        val sizeDp = prefs.getInt("size_dp", 160)
         params = WindowManager.LayoutParams(
-            dpToPx(PET_SIZE_DP),
-            dpToPx(PET_HEIGHT_DP),
+            dpToPx(sizeDp), baseHeightPx(),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
                 WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -66,8 +107,7 @@ class OverlayService : Service() {
             y = 300
         }
 
-        overlayView = WebView(this).apply {
-            // 必须在 loadUrl 之前设透明背景，否则白屏
+        web = WebView(this).apply {
             setBackgroundColor(0x00000000)
             settings.apply {
                 javaScriptEnabled = true
@@ -75,75 +115,195 @@ class OverlayService : Service() {
                 allowFileAccess = true
                 cacheMode = WebSettings.LOAD_DEFAULT
             }
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    pushState()
+                }
+            }
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
+            addJavascriptInterface(Bridge(), "PetBridge")
             loadUrl("file:///android_asset/pet.html")
-            setOnTouchListener(createTouchListener())
         }
 
-        windowManager?.addView(overlayView, params)
+        wm?.addView(web, params)
     }
 
-    // ==== 手势处理 ====
+    // ==== JS 桥 ====
 
-    private var initialX = 0
-    private var initialY = 0
-    private var initialTouchX = 0f
-    private var initialTouchY = 0f
-    private var touchStartTime = 0L
-    private var hasMoved = false
-    private var lastTapTime = 0L
+    private inner class Bridge {
+        @JavascriptInterface
+        fun getState(): String = buildStateJson().toString()
 
-    private fun createTouchListener(): View.OnTouchListener {
-        return View.OnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = params?.x ?: 0
-                    initialY = params?.y ?: 0
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    touchStartTime = System.currentTimeMillis()
-                    hasMoved = false
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = (event.rawX - initialTouchX).toInt()
-                    val dy = (event.rawY - initialTouchY).toInt()
-                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                        hasMoved = true
-                        params?.x = initialX + dx
-                        params?.y = initialY + dy
-                        windowManager?.updateViewLayout(overlayView, params)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val elapsed = System.currentTimeMillis() - touchStartTime
-                    if (!hasMoved) {
-                        when {
-                            elapsed > 600 -> callPet("onLongPress")
-                            System.currentTimeMillis() - lastTapTime < 300 -> {
-                                lastTapTime = 0L
-                                callPet("onDoubleTap")
-                            }
-                            else -> {
-                                lastTapTime = System.currentTimeMillis()
-                                callPet("onTap")
-                            }
-                        }
-                    }
-                    true
-                }
-                else -> false
+        @JavascriptInterface
+        fun feed(food: String) = post { onFeed(food) }
+
+        @JavascriptInterface
+        fun drag(dx: Int, dy: Int) = post { onDrag(dx, dy) }
+
+        @JavascriptInterface
+        fun resize(wDp: Int, hDp: Int) = post { onResize(wDp, hDp) }
+
+        @JavascriptInterface
+        fun event(kind: String) = post { onEvent(kind) }
+
+        @JavascriptInterface
+        fun openSettings() = post {
+            val i = Intent(this@OverlayService, com.aivo.liveoverflow.MainActivity::class.java)
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(i)
+        }
+    }
+
+    private fun post(r: () -> Unit) { handler.post(r) }
+
+    // ==== 状态机 ====
+
+    private fun minPerPoint(): Int =
+        MIN_PER_POINT[prefs.getInt("hunger_speed", 2) - 1]
+
+    private fun hungerNow(): Float {
+        val base = prefs.getFloat("hunger_base", 30f)
+        val t = prefs.getLong("hunger_time", System.currentTimeMillis())
+        val mins = ((System.currentTimeMillis() - t) / 60000f).coerceAtLeast(0f)
+        return (base + mins / minPerPoint()).coerceIn(0f, 100f)
+    }
+
+    private fun setHunger(h: Float) {
+        prefs.edit()
+            .putFloat("hunger_base", h.coerceIn(0f, 100f))
+            .putLong("hunger_time", System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun sleepStartMin() = prefs.getInt("sleep_start", 23 * 60 + 30)
+    private fun sleepEndMin() = prefs.getInt("sleep_end", 7 * 60)
+
+    private fun minuteOfDay(): Int {
+        val c = Calendar.getInstance()
+        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
+    }
+
+    private fun inSleepWindow(): Boolean {
+        val s = sleepStartMin()
+        val e = sleepEndMin()
+        val m = minuteOfDay()
+        return if (s <= e) m in s..e else m >= s || m < e
+    }
+
+    /** 手动叫醒：到当前睡眠窗口结束前都保持清醒 */
+    private fun awakeOverrideUntil(): Long = prefs.getLong("awake_override", 0L)
+
+    private fun currentState(): String {
+        if (System.currentTimeMillis() < eatingUntil) return "eat"
+        if (prefs.getBoolean("force_sleep", false)) return "sleep"
+        if (inSleepWindow() && System.currentTimeMillis() >= awakeOverrideUntil()) return "sleep"
+        return if (hungerNow() >= 72f) "hungry" else "idle"
+    }
+
+    private fun buildStateJson(): JSONObject = JSONObject().apply {
+        put("state", currentState())
+        put("hunger", hungerNow().toDouble())
+        put("rate", prefs.getInt("chat_rate", 2))
+        put("size", prefs.getInt("size_dp", 160))
+    }
+
+    private fun pushState() {
+        val w = web ?: return
+        w.evaluateJavascript(
+            "window.PetUI && PetUI.applyState(${buildStateJson()})", null
+        )
+        val t = notifText()
+        if (t != lastNotifText) updateNotification(t)
+    }
+
+    private fun notifText(): String = when (currentState()) {
+        "sleep" -> "睡着呢… Zzz"
+        "eat" -> "干饭中…"
+        "hungry" -> "饿了，戳它喂点吃的"
+        else -> "在守着你。"
+    }
+
+    private fun onFeed(food: String) {
+        val (delta, name) = when (food) {
+            "rice" -> 38f to "饭团"
+            "fish" -> 26f to "小鱼干"
+            "soup" -> 16f to "热汤"
+            else -> 25f to "饭"
+        }
+        setHunger(hungerNow() - delta)
+        eatingUntil = System.currentTimeMillis() + EAT_MS
+        pushState()
+    }
+
+    private fun onEvent(kind: String) {
+        when (kind) {
+            "sleep" -> prefs.edit().putBoolean("force_sleep", true).apply()
+            "wake" -> {
+                // 睡醒后撑到当前睡眠窗口结束为止
+                val until = if (inSleepWindow()) {
+                    val s = sleepStartMin(); val e = sleepEndMin(); val m = minuteOfDay()
+                    val remain = if (s <= e) e - m
+                    else if (m >= s) (1440 - m) + e else e - m
+                    System.currentTimeMillis() + remain * 60000L
+                } else 0L
+                prefs.edit()
+                    .putBoolean("force_sleep", false)
+                    .putLong("awake_override", until)
+                    .apply()
             }
         }
+        pushState()
     }
 
-    private fun callPet(method: String) {
-        overlayView?.evaluateJavascript(
-            "window.petEngine && window.petEngine.$method()", null
-        )
+    // ==== 定时器 ====
+
+    private fun startTick() {
+        val r = object : Runnable {
+            override fun run() {
+                pushState()
+                handler.postDelayed(this, TICK_MS)
+            }
+        }
+        tick = r
+        handler.post(r)
+    }
+
+    // ==== 设置同步 ====
+
+    private val prefListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            handler.post {
+                onResize(0, 0)  // 尺寸可能变了，回到基准大小
+                pushState()
+            }
+        }
+
+    private fun baseHeightPx(): Int =
+        dpToPx((prefs.getInt("size_dp", 160) * 1.28f).toInt().coerceAtLeast(140))
+
+    // ==== 拖拽 / 缩放 ====
+
+    private fun onDrag(dx: Int, dy: Int) {
+        val p = params ?: return
+        val dm = resources.displayMetrics
+        p.x = (p.x + dx).coerceIn(0, (dm.widthPixels - p.width).coerceAtLeast(0))
+        p.y = (p.y + dy).coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
+        wm?.updateViewLayout(web, p)
+    }
+
+    /** wDp/hDp 为 0 表示恢复基准大小；菜单展开时保持底边不动 */
+    private fun onResize(wDp: Int, hDp: Int) {
+        val p = params ?: return
+        val dm = resources.displayMetrics
+        val newW = if (wDp > 0) dpToPx(wDp) else dpToPx(prefs.getInt("size_dp", 160))
+        val newH = if (hDp > 0) dpToPx(hDp) else baseHeightPx()
+        val oldBottom = p.y + p.height
+        p.width = newW
+        p.height = newH
+        p.y = (oldBottom - newH).coerceIn(0, (dm.heightPixels - newH).coerceAtLeast(0))
+        p.x = p.x.coerceIn(0, (dm.widthPixels - newW).coerceAtLeast(0))
+        wm?.updateViewLayout(web, p)
     }
 
     // ==== 通知 ====
@@ -163,6 +323,12 @@ class OverlayService : Service() {
             .build()
     }
 
+    private fun updateNotification(text: String) {
+        lastNotifText = text
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -175,13 +341,4 @@ class OverlayService : Service() {
 
     private fun dpToPx(dp: Int): Int =
         (dp * resources.displayMetrics.density).toInt()
-
-    override fun onDestroy() {
-        overlayView?.let {
-            windowManager?.removeView(it)
-            it.destroy()
-        }
-        overlayView = null
-        super.onDestroy()
-    }
 }

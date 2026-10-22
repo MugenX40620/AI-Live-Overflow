@@ -1,25 +1,262 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="32dp">
+    android:background="#141319"
+    android:fillViewport="true">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="AI Live Overflow"
-        android:textSize="24sp"
-        android:textStyle="bold" />
+        android:orientation="vertical"
+        android:padding="20dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:gravity="center"
-        android:text="首次使用需要授予「悬浮窗」权限\n授权后桌宠就会出现在你的屏幕上"
-        android:textSize="14sp"
-        android:lineSpacingExtra="4dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="柏源 · 桌宠"
+            android:textColor="#F2E9DC"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="状态：—"
+            android:textColor="#9B93A8"
+            android:textSize="13sp" />
+
+        <!-- 桌宠开关 -->
+        <Switch
+            android:id="@+id/swPet"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:padding="12dp"
+            android:text="显示桌宠"
+            android:textColor="#F2E9DC"
+            android:textSize="15sp"
+            android:background="#1E1C25" />
+
+        <!-- 状态 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="状态"
+            android:textColor="#8D8499"
+            android:textSize="12sp"
+            android:letterSpacing="0.1" />
+
+        <ProgressBar
+            android:id="@+id/hungerBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:max="100"
+            android:progressTint="#E0A14F" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvHunger"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="饱腹度 —"
+                android:textColor="#F2E9DC"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnFeed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="喂个饭团"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 闲聊频率 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="闲聊频率"
+            android:textColor="#8D8499"
+            android:textSize="12sp"
+            android:letterSpacing="0.1" />
+
+        <RadioGroup
+            android:id="@+id/rgChat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/rbChat0"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="闭嘴"
+                android:textColor="#F2E9DC" />
+
+            <RadioButton
+                android:id="@+id/rbChat1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:text="少"
+                android:textColor="#F2E9DC" />
+
+            <RadioButton
+                android:id="@+id/rbChat2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:text="正常"
+                android:textColor="#F2E9DC" />
+
+            <RadioButton
+                android:id="@+id/rbChat3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:text="多"
+                android:textColor="#F2E9DC" />
+        </RadioGroup>
+
+        <!-- 作息 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="作息（到点自动睡 / 自动醒）"
+            android:textColor="#8D8499"
+            android:textSize="12sp"
+            android:letterSpacing="0.1" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnSleepStart"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:text="睡觉 23:30"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnSleepEnd"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="起床 07:00"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 饥饿速度 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="饥饿速度"
+            android:textColor="#8D8499"
+            android:textSize="12sp"
+            android:letterSpacing="0.1" />
+
+        <RadioGroup
+            android:id="@+id/rgSpeed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/rbSpeed1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="慢"
+                android:textColor="#F2E9DC" />
+
+            <RadioButton
+                android:id="@+id/rbSpeed2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:text="正常"
+                android:textColor="#F2E9DC" />
+
+            <RadioButton
+                android:id="@+id/rbSpeed3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:text="快"
+                android:textColor="#F2E9DC" />
+        </RadioGroup>
+
+        <!-- 大小 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="桌宠大小"
+            android:textColor="#8D8499"
+            android:textSize="12sp"
+            android:letterSpacing="0.1" />
+
+        <SeekBar
+            android:id="@+id/sbSize"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:max="100" />
+
+        <TextView
+            android:id="@+id/tvSize"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="160"
+            android:textColor="#F2E9DC"
+            android:textSize="13sp" />
+
+        <!-- 权限 -->
+        <TextView
+            android:id="@+id/tvPerm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="悬浮窗权限：未授予"
+            android:textColor="#C0505A"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnPerm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="去授予悬浮窗权限"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnQuit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="24dp"
+            android:text="关闭桌宠"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+</ScrollView>
