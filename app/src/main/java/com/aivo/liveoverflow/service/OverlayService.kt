@@ -287,10 +287,8 @@ class OverlayService : Service() {
     private fun onDrag(dx: Int, dy: Int) {
         val p = params ?: return
         val dm = resources.displayMetrics
-        // JS 传来的是 CSS 像素，窗口坐标是物理像素，要乘密度
-        val d = dm.density
-        p.x = (p.x + (dx * d).toInt()).coerceIn(0, (dm.widthPixels - p.width).coerceAtLeast(0))
-        p.y = (p.y + (dy * d).toInt()).coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
+        p.x = (p.x + dx).coerceIn(0, (dm.widthPixels - p.width).coerceAtLeast(0))
+        p.y = (p.y + dy).coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
         wm?.updateViewLayout(web, p)
     }
 
