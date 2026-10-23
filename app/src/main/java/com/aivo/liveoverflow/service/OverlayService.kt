@@ -139,7 +139,10 @@ class OverlayService : Service() {
         fun feed(food: String) = post { onFeed(food) }
 
         @JavascriptInterface
-        fun drag(dx: Int, dy: Int) = post { onDrag(dx, dy) }
+        fun dragStart() = post { onDragStart() }
+
+        @JavascriptInterface
+        fun dragTo(dx: Int, dy: Int) = post { onDragTo(dx, dy) }
 
         @JavascriptInterface
         fun resize(wDp: Int, hDp: Int) = post { onResize(wDp, hDp) }
@@ -284,11 +287,22 @@ class OverlayService : Service() {
 
     // ==== 拖拽 / 缩放 ====
 
-    private fun onDrag(dx: Int, dy: Int) {
+    /** 拖动采用屏幕绝对坐标：JS 传 screenX/screenY 相对位移（CSS 像素），不随窗口移动反馈 */
+    private var dragBaseX = 0
+    private var dragBaseY = 0
+
+    private fun onDragStart() {
+        val p = params ?: return
+        dragBaseX = p.x
+        dragBaseY = p.y
+    }
+
+    private fun onDragTo(dx: Int, dy: Int) {
         val p = params ?: return
         val dm = resources.displayMetrics
-        p.x = (p.x + dx).coerceIn(0, (dm.widthPixels - p.width).coerceAtLeast(0))
-        p.y = (p.y + dy).coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
+        val d = dm.density
+        p.x = (dragBaseX + (dx * d).toInt()).coerceIn(0, (dm.widthPixels - p.width).coerceAtLeast(0))
+        p.y = (dragBaseY + (dy * d).toInt()).coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
         wm?.updateViewLayout(web, p)
     }
 

@@ -630,9 +630,10 @@
     if (e.target.closest && e.target.closest('.panel, #bubble')) return;
     press = {
       x: e.clientX, y: e.clientY,
-      lx: e.clientX, ly: e.clientY,
+      sx: e.screenX, sy: e.screenY,
       t: Date.now(), moved: false, long: false, timer: null
     };
+    if (bridge) { try { bridge.dragStart(); } catch (err) {} }
     press.timer = setTimeout(function () {
       if (press && !press.moved) { press.long = true; openMenu(); }
     }, 520);
@@ -640,16 +641,14 @@
 
   stage.addEventListener('pointermove', function (e) {
     if (!press) return;
-    var dx = e.clientX - press.lx;
-    var dy = e.clientY - press.ly;
+    var dx = e.screenX - press.sx;
+    var dy = e.screenY - press.sy;
     if (Math.abs(e.clientX - press.x) > 5 || Math.abs(e.clientY - press.y) > 5) {
       press.moved = true;
       clearTimeout(press.timer);
     }
     if (press.moved && (dx || dy)) {
-      if (bridge) { try { bridge.drag(Math.round(dx), Math.round(dy)); } catch (err) {} }
-      press.lx = e.clientX;
-      press.ly = e.clientY;
+      if (bridge) { try { bridge.dragTo(Math.round(dx), Math.round(dy)); } catch (err) {} }
     }
   }, { passive: true });
 
