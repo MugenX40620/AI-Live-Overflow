@@ -735,6 +735,12 @@
   }
 
   function feed(id) {
+    // 肚子已经饱了：拒绝进食（S.hunger 越小越饱）
+    if (S.hunger <= 2) {
+      closePanels();
+      say('吃不下了……已经很撑了。');
+      return;
+    }
     if (bridge) {
       try { bridge.feed(id); } catch (e) {}
       return;

@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">AI Live Overflow</string>
     <string name="status_fmt">状态：%1$s</string>
-    <string name="hunger_fmt">饱腹度 %1$d%%</string>
+    <string name="hunger_fmt">饱食度 %1$d%%</string>
     <string name="sleep_fmt">%1$s</string>
     <string name="size_fmt">%1$d</string>
 </resources>

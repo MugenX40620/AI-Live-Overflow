@@ -43,7 +43,7 @@ class OverlayService : Service() {
         private const val EAT_MS = 7000L
 
         // 每涨 1 点饥饿需要的分钟数（慢/正常/快）
-        private val MIN_PER_POINT = intArrayOf(14, 9, 5)
+        private val MIN_PER_POINT = intArrayOf(12, 5, 2)
     }
 
     private var wm: WindowManager? = null
@@ -234,9 +234,24 @@ class OverlayService : Service() {
             "soup" -> 16f to "热汤"
             else -> 25f to "饭"
         }
+        // 已经很饱了就不吃（hunger 越小越饱）
+        if (hungerNow() <= 2f) {
+            web?.evaluateJavascript(
+                "window.PetUI && PetUI.say('吃不下了……已经很撑了。')", null
+            )
+            pushState()
+            return
+        }
         setHunger(hungerNow() - delta)
         eatingUntil = System.currentTimeMillis() + EAT_MS
         pushState()
+        handler.postDelayed({
+            if (System.currentTimeMillis() >= eatingUntil - 50) {
+                web?.evaluateJavascript(
+                    "window.PetUI && PetUI.say('吃饱了……谢谢。')", null
+                )
+            }
+        }, EAT_MS + 200)
     }
 
     private fun onEvent(kind: String) {

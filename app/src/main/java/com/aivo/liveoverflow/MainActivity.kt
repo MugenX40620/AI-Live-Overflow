@@ -158,18 +158,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun feed(delta: Float) {
         val h = hungerNow()
+        if (h <= 2f) {
+            Toast.makeText(this, "它已经吃得很饱了，等饿一点再喂", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val after = (h - delta).coerceIn(0f, 100f)
         prefs.edit()
-            .putFloat("hunger_base", (h - delta).coerceIn(0f, 100f))
+            .putFloat("hunger_base", after)
             .putLong("hunger_time", System.currentTimeMillis())
             .apply()
-        Toast.makeText(this, "它吃上了（饱腹度 +$delta）", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "它吃上了（饱食度 +${delta.toInt()}）", Toast.LENGTH_SHORT).show()
         refresh()
     }
 
     // ==== 状态显示（和服务端同一套算法） ====
 
     private fun minPerPoint(): Int =
-        intArrayOf(14, 9, 5)[prefs.getInt("hunger_speed", 2) - 1]
+        intArrayOf(12, 5, 2)[prefs.getInt("hunger_speed", 2) - 1]
 
     private fun hungerNow(): Float {
         val base = prefs.getFloat("hunger_base", 30f)
@@ -195,8 +200,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun refresh() {
         val h = hungerNow()
-        hungerBar.progress = h.toInt()
-        tvHunger.text = getString(R.string.hunger_fmt, h.toInt())
+        // 内部 hunger：0=饱 100=饿；对外展示成饱食度（100 - hunger）
+        val full = (100f - h).toInt()
+        hungerBar.progress = full
+        tvHunger.text = getString(R.string.hunger_fmt, full)
         tvStatus.text = getString(R.string.status_fmt, stateText())
 
         val granted = Settings.canDrawOverlays(this)
